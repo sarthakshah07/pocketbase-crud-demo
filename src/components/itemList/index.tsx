@@ -96,7 +96,6 @@ const AddDialog =(props:DialogProps)=>{
             setIsEdit(true)
         }
     },[activeRow])
-console.log("active row", activeRow);
 
     return(
         <Dialog onClose={handleClose} open={openAddDialog} sx={{padding:"30px !important"}}>

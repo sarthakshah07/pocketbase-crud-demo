@@ -3,7 +3,7 @@ import Pocketbase from 'pocketbase';
 import { Item } from '../models/Items';
 
 interface PocketbaseContextProps {
-  pocketbase: Pocketbase;
+  myPocketbase: Pocketbase;
   items: Item[];
   fetchItems: () => Promise<void>;
   addItem: (itemName: string) => Promise<void>;
@@ -27,22 +27,37 @@ export const usePocketbase = () => {
 
 export const PocketbaseProvider: React.FC<PocketbaseProviderProps> = ({ children }) => {
   const [items, setItems] = useState<Item[]>([]);
-  const [pocketbase] = useState(
+  const [subscription, setSubscription] = useState<any>(null);
+  const [myPocketbase] = useState(
     new Pocketbase("http://127.0.0.1:8090")
   );
   // const authData =  pocketbase.collection('users').authWithPassword("sarthakshah44993@gmail.com", "Admin@123");
   const fetchItems = async () => {
     try {
-      const authAdminData = pocketbase.admins.authWithPassword('sarthakshah44993@gmail.com', 'superAdmin@123');
-      pocketbase.collection('items').subscribe('*', function (e:any) {
-        console.log("action",e.action);
-        console.log("record",e.record);
-    }, { /* other options like expand, custom headers, etc. */ });
-      const records = await pocketbase.collection('items').getFullList({
+      const authAdminData = myPocketbase.admins.authWithPassword('sarthakshah44993@gmail.com', 'superAdmin@123');
+   
+      const newSubscription = myPocketbase.collection('items').subscribe(
+        '*', // empty string as the query
+        (change: any) => {
+          console.log("change outside", change);
+          
+          // Handle the change and update state accordingly
+          if (change.action === "create" || change.action === 'update' || change.action === 'delete') {
+            fetchItems(); // Update the items state
+            console.log("change",change);
+            
+          }
+        }
+      );
+        console.log("new subscription",newSubscription);
+        
+      setSubscription(newSubscription);
+      const records = await myPocketbase.collection('items').getFullList({
         sort: '-created',
       });
 
       setItems(records);
+  
     } catch (error) {
       console.error('Error fetching items:', error);
     }
@@ -52,7 +67,7 @@ export const PocketbaseProvider: React.FC<PocketbaseProviderProps> = ({ children
     const data = {
       "name": itemName
     };
-    const newData = await pocketbase.collection('items').create(data).then((res) => {
+    const newData = await myPocketbase.collection('items').create(data).then((res) => {
       setTimeout(() => {
         
         fetchItems()
@@ -65,7 +80,7 @@ export const PocketbaseProvider: React.FC<PocketbaseProviderProps> = ({ children
     const data = {
       "name": itemName
     };
-    const newData = await pocketbase.collection('items').update(itemId, data).then((res) => {
+    const newData = await myPocketbase.collection('items').update(itemId, data).then((res) => {
       setTimeout(() => {
         
         fetchItems()
@@ -77,7 +92,7 @@ export const PocketbaseProvider: React.FC<PocketbaseProviderProps> = ({ children
 
   const deleteItem = async (itemId:string ) => {
    
-    const newData = await pocketbase.collection('items').delete(itemId).then((res) => {
+    const newData = await myPocketbase.collection('items').delete(itemId).then((res) => {
       setTimeout(() => {
         
         fetchItems()
@@ -88,10 +103,19 @@ export const PocketbaseProvider: React.FC<PocketbaseProviderProps> = ({ children
   }
   useEffect(() => {
     fetchItems();
-  }, []);
+   
+    return () => {
+      // Unsubscribe when the component is unmounted
+      if (subscription) {
+        subscription.unsubscribe();
+        console.log("subscription on unmount", subscription);
+        
+      }
+    };
+  }, [myPocketbase]);
 
   const contextValue: PocketbaseContextProps = {
-    pocketbase,
+    myPocketbase,
     items,
     fetchItems,
     addItem,
